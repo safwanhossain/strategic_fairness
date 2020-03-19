@@ -5,13 +5,14 @@ from erm_classifier import *
 from fairlearn.postprocessing import ThresholdOptimizer
 from sklearn.base import BaseEstimator, ClassifierMixin
 
-class erm_classifier_prob(BaseEstimator, ClassifierMixin):
-    def __init__(self, logistic_regression_estimator):
-        self.logistic_regression_estimator = logistic_regression_estimator
-    
+NUM_SAMPLES = 100
+
+class erm_classifier_prob(BaseEstimator, ClassifierMixin, base_binary_classifier):
     def fit(self, X, y):
         estimator = LogisticRegression()
         estimator.fit(X, y)
+        self.model = estimator
+        self.trained = True
         return self
 
     def predict(self, x_samples):
@@ -19,13 +20,11 @@ class erm_classifier_prob(BaseEstimator, ClassifierMixin):
         return y_samples
 
 class equalized_odds_classifier(base_binary_classifier):
-    def train(self, sensitive_features):
-        self.sensitive_features = sensitive_features
-        estimator = LogisticRegression()
-        prob_estimator = erm_classifier_prob(estimator)
-        prob_estimator.fit(self.train_X, self.train_Y)
-        self.model = ThresholdOptimizer(estimator=prob_estimator, constraints="equalized_odds")
-        self.model.fit(self.train_X, self.train_Y, sensitive_features=self.sensitive_features) 
+    def train(self):
+        erm_classifier = erm_classifier_prob(self.train_X, self.train_Y, self.sensitive_train)
+        erm_classifier.fit(self.train_X, self.train_Y)
+        self.model = ThresholdOptimizer(estimator=erm_classifier, constraints="equalized_odds")
+        self.model.fit(self.train_X, self.train_Y, sensitive_features=self.sensitive_train) 
 
     def predict(self, x_samples, sensitive_features):
         y_samples = self.model.predict(x_samples, sensitive_features=sensitive_features)
@@ -34,6 +33,10 @@ class equalized_odds_classifier(base_binary_classifier):
     def get_accuracy(self, X, y_true, sensitive_features):
         y_pred = self.predict(X, sensitive_features)
         return 1 - np.sum(np.power(y_pred - y_true, 2))/len(y_true) 
+
+    def predict_prob(self, x_samples, sensitive_features):
+        y_samples = self.model._pmf_predict(x_samples, sensitive_features=sensitive_features)
+        return y_samples
 
 def convert_to_binary(str_features, str1, str2):
     bin_features = np.array([])
@@ -60,16 +63,24 @@ def main():
             "African-American", "Caucasian")
     X_train_sen = np.c_[X_train, sensitive_train_binary]
     X_test_sen = np.c_[X_test, sensitive_test_binary]
+    sensitive_features_dict = {0:"African-American", 1:"Caucasian"}
 
-    classifier = equalized_odds_classifier(X_train, y_train, X_test, y_test)
-    classifier.train(sensitive_train_binary)
-    train_acc = classifier.get_accuracy(X_train, y_train)
-    test_acc = classifier.get_accuracy(X_test, y_test)
-    print("Training accuracy of classifier: ", train_acc)
-    print("Test accuracy of classifier: ", test_acc)
+    eo_classifier = equalized_odds_classifier(X_train, y_train, sensitive_train_binary, \
+            sensitive_features_dict)
+    eo_classifier.train()
     
-    _, _ = classifier.get_proportions(sensitive_features_train, X_train)
-    #classifier.get_test_flips(X_test, sensitive_test_binary)
+    total_train, total_test = 0, 0
+    for i in range(NUM_SAMPLES):
+        total_train += eo_classifier.get_accuracy(X_train, y_train, sensitive_train_binary)
+        total_test += eo_classifier.get_accuracy(X_test, y_test, sensitive_test_binary)
+    print("Train Acc:", total_train/NUM_SAMPLES) 
+    print("Test Acc:", total_test/NUM_SAMPLES) 
+    
+    _, _ = eo_classifier.get_proportions(X_train, sensitive_train_binary)
+    eo_classifier.get_test_flips(X_test, sensitive_test_binary, False)
+    eo_classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train) 
+    print("\n")
+    eo_classifier.get_group_confusion_matrix(sensitive_test_binary, X_test, y_test) 
 
 if __name__ == "__main__":
     main()

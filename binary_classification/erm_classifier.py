@@ -1,24 +1,29 @@
 from sklearn.linear_model import LogisticRegression
 from base_classifier import *
 
+NUM_SAMPLES = 100
+
 class erm_classifier(base_binary_classifier):
     def train(self):
         estimator = LogisticRegression()
-        estimator.fit(self.train_X, self.train_Y)
+        total_train = np.c_[self.train_X, self.sensitive_train]
+        estimator.fit(total_train, self.train_Y)
         self.model = estimator
         self.trained = True
 
-    def predict(self, x_samples):
+    def predict(self, x_samples, sensitive_features=None):
         if self.trained == False:
             print("Train the model first!")
             return
+        x_samples = np.c_[x_samples, sensitive_features]
         y_samples = self.model.predict(x_samples)
         return y_samples
     
-    def predict_prob(self, x_samples):
+    def predict_prob(self, x_samples, sensitive_features):
         if self.trained == False:
             print("Train the model first!")
             return
+        x_samples = np.c_[x_samples, sensitive_features]
         y_samples = self.model.predict_proba(x_samples)[0]
         return y_samples
 
@@ -44,22 +49,16 @@ def main():
     sensitive_test_binary = convert_to_binary(sensitive_features_test, \
             "African-American", "Caucasian")
     sensitive_features_dict = {0:"African-American", 1:"Caucasian"}
-    #sensitive_train_binary = np.random.randint(0,2, len(y_train))
-    #sensitive_test_binary = np.random.randint(0,1, len(y_test))
-    #sensitive_test_binary[0] = 1
-    #sensitive_train_binary = np.zeros(len(y_train))
-    #sensitive_test_binary = np.zeros(len(y_test))
-    X_train = np.c_[X_train, sensitive_train_binary]
-    X_test = np.c_[X_test, sensitive_test_binary]
-
-    classifier = erm_classifier(X_train, y_train, sensitive_features_dict)
+    classifier = erm_classifier(X_train, y_train, sensitive_train_binary, sensitive_features_dict)
     classifier.train()
-    #train_acc = classifier.get_accuracy(X_train, y_train)
-    #test_acc = classifier.get_accuracy(X_test, y_test)
-    #print(train_acc)
-    #print(test_acc)
-    
-    #_, _ = classifier.get_proportions(sensitive_features_train, X_train)
+    total_train, total_test = 0, 0
+    for i in range(NUM_SAMPLES):
+        total_train += classifier.get_accuracy(X_train, y_train, sensitive_train_binary)
+        total_test += classifier.get_accuracy(X_test, y_test, sensitive_test_binary)
+    print("Train Acc:", total_train/NUM_SAMPLES) 
+    print("Test Acc:", total_test/NUM_SAMPLES) 
+        
+    _, _ = classifier.get_proportions(X_train, sensitive_train_binary)
     classifier.get_test_flips(X_test, sensitive_test_binary, False)
     classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train) 
     print("\n")
