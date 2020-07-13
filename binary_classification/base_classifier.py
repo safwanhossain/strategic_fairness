@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sp
 
 class base_binary_classifier:
-    def __init__(self, train_X, train_y, sensitive_train, sensitive_features_dict=None):
+    def __init__(self, train_X, train_y, sensitive_train=None, sensitive_features_dict=None):
         self.train_X = train_X
         self.train_Y = train_y
         self.sensitive_train = sensitive_train
@@ -12,7 +12,7 @@ class base_binary_classifier:
         self.trained = False
         self.groups = None
 
-    def train(self):
+    def fit(self):
         # train the classifer on the training data according to whatever
         # fairness metric you have in mind        
         # return the training loss
@@ -20,6 +20,13 @@ class base_binary_classifier:
         pass
 
     def predict(self, samples, sensitive_features=None):
+        # predict the outcome of the model on the given samples. If samples
+        # is none, then the self.test_data will be used
+        # return the loss as well as the predictions
+        print("Not Implemented!")
+        pass
+
+    def predict_proba(self, samples, sensitive_features=None):
         # predict the outcome of the model on the given samples. If samples
         # is none, then the self.test_data will be used
         # return the loss as well as the predictions
@@ -64,12 +71,12 @@ class base_binary_classifier:
             for group in groups:
                 if group == curr_group:
                     continue
-                pred_prob = self.predict_prob(x.reshape(1,-1), s.reshape(1,-1))[0]
+                pred_prob = self.predict_proba(x.reshape(1,-1), s.reshape(1,-1))[0]
                 curr_group, group = int(curr_group), int(group)
                 new_s = np.array(group).reshape(1,-1)
                 tup = (self.sensitive_features_dict[curr_group], self.sensitive_features_dict[group])
                 new_pred = self.predict(x.reshape(1,-1), new_s)[0]
-                new_pred_prob = self.predict_prob(x.reshape(1,-1), new_s)[0]
+                new_pred_prob = self.predict_proba(x.reshape(1,-1), new_s)[0]
                 
                 div = 1
                 if percent == True:
@@ -96,6 +103,7 @@ class base_binary_classifier:
         positive_pt = {}
         indicies = {}
         y_pred = self.predict(X, sensitive_features)
+        print("Total samples", len(sensitive_features), "total +ve", sum(y_pred))
 
         for index, group in enumerate(groups):
             indicies[group] = np.where(sensitive_features==group)[0]
@@ -103,10 +111,10 @@ class base_binary_classifier:
             positive_pt[group] = positive_count[group]/len(indicies[group])
             print("Num people", len(indicies[group]))
             if self.sensitive_features_dict is not None:
-                print("Group ", self.sensitive_features_dict[group], " recidivism rate:", \
+                print("Group ", self.sensitive_features_dict[group], " +ve classification rate:", \
                         positive_pt[group])
             else:
-                print("Group ", group, " recidivism rate:", positive_pt[group])
+                print("Group ", group, " +ve classification rate:", positive_pt[group])
 
         return positive_count, positive_pt
         
@@ -142,8 +150,13 @@ class base_binary_classifier:
             fp_rate[group] = fp 
             fn_rate[group] = fn 
         
+            precision = tp / (tp + fp)
+            recall = tp / (tp + fn)
+            f1 = 2*precision*recall/(precision+recall)
+
             accuracy = 1 - np.sum(np.power(true_class - pred_class, 2))/len(true_class) 
             print(self.sensitive_features_dict[group], "confusion matrix (Positive is re-offending)")
+            print("\t F1 score: ", f1)
             print("\t Group Accuracy: ", accuracy)
             print("\t True positive rate:", tp)
             print("\t True negative rate:", tn)

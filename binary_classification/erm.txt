@@ -1,0 +1,43 @@
+Train Acc: 0.6654411764705876
+Test Acc: 0.6613088404133187
+Total samples 3536 total +ve 1488.0
+Num people 2147
+Group  African-American  +ve classification rate: 0.52026082906381
+Num people 1389
+Group  Caucasian  +ve classification rate: 0.26709863210943124
+Those gaining by flipping attributes:  {('African-American', 'Caucasian'): 8.0, ('Caucasian', 'African-American'): 0}
+Those losing by flipping attributes:  {('African-American', 'Caucasian'): 0, ('Caucasian', 'African-American'): 4.0}
+(3536, 10)
+(3536,)
+African-American confusion matrix (Positive is re-offending)
+	 F1 score:  0.678247314575601
+	 Group Accuracy:  0.6734979040521658
+	 True positive rate: 0.6890909090909091
+	 True negative rate: 0.6571155682903533
+	 False positive rate: 0.3428844317096466
+	 False negative rate: 0.3109090909090909
+Caucasian confusion matrix (Positive is re-offending)
+	 F1 score:  0.5055813870579831
+	 Group Accuracy:  0.6529877609791217
+	 True positive rate: 0.3992740471869328
+	 True negative rate: 0.8198090692124105
+	 False positive rate: 0.1801909307875895
+	 False negative rate: 0.6007259528130672
+
+
+(1742, 10)
+(1742,)
+African-American confusion matrix (Positive is re-offending)
+	 F1 score:  0.6654810558776084
+	 Group Accuracy:  0.6643968871595332
+	 True positive rate: 0.6684491978609626
+	 True negative rate: 0.6595289079229122
+	 False positive rate: 0.3404710920770878
+	 False negative rate: 0.3315508021390374
+Caucasian confusion matrix (Positive is re-offending)
+	 F1 score:  0.5169008048985745
+	 Group Accuracy:  0.6568627450980392
+	 True positive rate: 0.41697416974169743
+	 True negative rate: 0.8036117381489842
+	 False positive rate: 0.1963882618510158
+	 False negative rate: 0.5830258302583026
