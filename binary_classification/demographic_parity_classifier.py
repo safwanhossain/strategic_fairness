@@ -8,12 +8,13 @@ from utils import *
 NUM_SAMPLES = 100
 
 class demographic_parity_classifier(base_binary_classifier):
-    def train(self):
+    def fit(self, _X, _Y, _classifier_name="logistic", _predictor="hard"):
         my_erm_classifier = erm_classifier(self.train_X, self.train_Y)
-        my_erm_classifier.fit(self.train_X, self.train_Y, classifier_name="logistic")
+        my_erm_classifier.fit(self.train_X, self.train_Y, classifier_name=_classifier_name)
         self.model = ThresholdOptimizer(estimator=my_erm_classifier, \
                 constraints="demographic_parity", prefit=True)
-        self.model.fit(self.train_X, self.train_Y, sensitive_features=self.sensitive_train) 
+        self.model.fit(self.train_X, self.train_Y, \
+                sensitive_features=self.sensitive_train, _predictor=_predictor) 
     
     def predict(self, x_samples, sensitive_features):
         y_samples = self.model.predict(x_samples, sensitive_features=sensitive_features)
@@ -40,7 +41,7 @@ def main():
 
     dp_classifier = demographic_parity_classifier(X_train, y_train, sensitive_train_binary, \
             sensitive_features_dict)
-    dp_classifier.train()
+    dp_classifier.fit(X_train, y_train)
     
     total_train, total_test = 0, 0
     for i in range(NUM_SAMPLES):

@@ -66,7 +66,6 @@ def main():
             sensitive_feature_names[1], sensitive_feature_names[0])
     # 0 should be black, 1 white
     sensitive_features_dict = {0:sensitive_feature_names[0], 1:sensitive_feature_names[1]}
-
     erm_classifier(X_train, y_train, X_test, y_test)
 
     # uncomment this for fariness throught unawareness
@@ -81,8 +80,8 @@ def main():
     print("Train Acc:", total_train/NUM_SAMPLES) 
     print("Test Acc:", total_test/NUM_SAMPLES) 
         
-    _, _ = classifier.get_proportions(X_train, sensitive_train_binary)
-    _, _ = classifier.get_proportions(X_test, sensitive_test_binary)
+    classifier.get_proportions(X_train, sensitive_train_binary)
+    classifier.get_proportions(X_test, sensitive_test_binary)
     classifier.get_test_flips(X_test, sensitive_test_binary, True)
     classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train) 
     print("\n")

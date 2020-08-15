@@ -2,27 +2,45 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 
-def get_data_compas():
+# In all datasets, let "1" denote the good/desirable outcome and "0"
+# denote he poor outcome
+
+def get_data_compas(sensitive):
+    """ Here the desirable outcome is 0 - not going to re-offend. So gonna flip it
+    """
+    assert sensitive == "race" or sensitive == "sex"
     from tempeh.configurations import datasets
     compas_dataset = datasets['compas']()
     X_train, X_test = compas_dataset.get_X()
     y_train, y_test = compas_dataset.get_y()
-    y_train, y_test = y_train.flatten(), y_test.flatten()
-    sensitive_feature_names = ["African-American", "Caucasian"]
-    sensitive_features_train, sensitive_features_test = \
+    y_train, y_test = 1 - y_train.flatten(), 1 - y_test.flatten()
+    
+    if sensitive == "race":
+        sensitive_feature_names = ["African-American", "Caucasian"]
+        sensitive_features_train, sensitive_features_test = \
             compas_dataset.get_sensitive_features('race')
+    else:
+        sensitive_feature_names = ["Female", "Male"]
+        sensitive_features_train, sensitive_features_test = \
+            compas_dataset.get_sensitive_features('sex')
     return X_train, X_test, sensitive_features_train, sensitive_features_test, y_train, y_test, \
             sensitive_feature_names
     
-def get_data_lawschool():
+def get_data_lawschool(sensitive):
+    assert sensitive == "race" or sensitive == "sex"
     from tempeh.configurations import datasets
     compas_dataset = datasets['lawschool_passbar']()
     X_train, X_test = compas_dataset.get_X()
     y_train, y_test = compas_dataset.get_y()
     y_train, y_test = y_train.flatten(), y_test.flatten()
-    sensitive_feature_names = ["Black", "White"]
-    sensitive_features_train, sensitive_features_test = \
+    if sensitive == "race":
+        sensitive_feature_names = ["black", "white"]
+        sensitive_features_train, sensitive_features_test = \
             compas_dataset.get_sensitive_features('race')
+    else:
+        sensitive_feature_names = ["female", "male"]
+        sensitive_features_train, sensitive_features_test = \
+            compas_dataset.get_sensitive_features('gender')
     return X_train, X_test, sensitive_features_train, sensitive_features_test, y_train, y_test, \
             sensitive_feature_names
 

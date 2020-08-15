@@ -40,7 +40,7 @@ class base_binary_classifier:
         y_pred = self.predict(X, sensitive_features)
         return 1 - np.sum(np.power(y_pred - y_true, 2))/len(y_true) 
 
-    def get_test_flips(self, test_X, sensitive_features_bin, percent=False):
+    def get_test_flips(self, test_X, sensitive_features_bin, percent=False, to_print=False):
         # This is for strategic behaviour in fairness.
         # For each sample in the test set, obtain the percentage of people who would
         # benefit by flipping and those that would not.
@@ -66,34 +66,41 @@ class base_binary_classifier:
         loss_flips = {z:0 for z in keys}
         gain_probs = {z:[] for z in keys}
         loss_probs = {z:[] for z in keys}
+        gain_dict, loss_dict = {}, {}
+
+        for group in groups:
+            gain_dict[self.sensitive_features_dict[group]] = 0
+            loss_dict[self.sensitive_features_dict[group]] = 0
+
         for x, y, s in zip(test_X, test_Y, sensitive_features_bin):
             curr_group = s
             for group in groups:
                 if group == curr_group:
                     continue
-                pred_prob = self.predict_proba(x.reshape(1,-1), s.reshape(1,-1))[0]
                 curr_group, group = int(curr_group), int(group)
                 new_s = np.array(group).reshape(1,-1)
                 tup = (self.sensitive_features_dict[curr_group], self.sensitive_features_dict[group])
                 new_pred = self.predict(x.reshape(1,-1), new_s)[0]
-                new_pred_prob = self.predict_proba(x.reshape(1,-1), new_s)[0]
                 
                 div = 1
                 if percent == True:
                     div = len(indicies[curr_group]) 
                 # gaining by flipping
-                if y == 1 and new_pred == 0:
-                    gain_probs[tup].append([pred_prob, new_pred_prob])
-                    gain_flips[tup] += 1/div
                 if y == 0 and new_pred == 1:
-                    loss_probs[tup].append([pred_prob, new_pred_prob])
-                    loss_flips[tup] += 1/div
-       
-        print("Those gaining by flipping attributes: ", gain_flips)
-        print("Those losing by flipping attributes: ", loss_flips)
-        return gain_flips, gain_probs, loss_flips, loss_probs
+                    gain_flips[tup] += 1/div
+                    gain_dict[self.sensitive_features_dict[curr_group]] += 1/div
 
-    def get_proportions(self, X, sensitive_features):
+                # lose by flipping
+                if y == 1 and new_pred == 0:
+                    loss_flips[tup] += 1/div
+                    loss_dict[self.sensitive_features_dict[curr_group]] += 1/div
+      
+        if to_print:
+            print("Those gaining by flipping attributes: ", gain_flips)
+            print("Those losing by flipping attributes: ", loss_flips)
+        return gain_dict, loss_dict
+
+    def get_proportions(self, X, y, sensitive_features, to_print=True):
         # For a trained classifier, get the proportion of samples (in test and train) that 
         # receive positive classification based on groups (currently only works for binary)
         # sensitive_index is the index of the sensitive attribute (need not be binary)
@@ -103,22 +110,26 @@ class base_binary_classifier:
         positive_pt = {}
         indicies = {}
         y_pred = self.predict(X, sensitive_features)
-        print("Total samples", len(sensitive_features), "total +ve", sum(y_pred))
+        print("Total samples", len(sensitive_features), \
+                "total true positive", sum(y), \
+                "total +ve pred", sum(y_pred))
 
         for index, group in enumerate(groups):
             indicies[group] = np.where(sensitive_features==group)[0]
             positive_count[group] = sum(y_pred[indicies[group]])
             positive_pt[group] = positive_count[group]/len(indicies[group])
-            print("Num people", len(indicies[group]))
             if self.sensitive_features_dict is not None:
-                print("Group ", self.sensitive_features_dict[group], " +ve classification rate:", \
+                print("Group ", self.sensitive_features_dict[group], \
+                        "num people: ", len(indicies[group]), \
+                        " +ve classification rate:", \
                         positive_pt[group])
             else:
                 print("Group ", group, " +ve classification rate:", positive_pt[group])
-
+        
+        print("\n")
         return positive_count, positive_pt
         
-    def get_group_confusion_matrix(self, sensitive_features, X, true_Y):
+    def get_group_confusion_matrix(self, sensitive_features, X, true_Y, to_print=False):
         # For a trained classifier, get the true positive and true negative rates based on
         # group identity. Dobased on groups (currently only works for binary)
         # sensitive_index is the index of the sensitive attribute.
@@ -128,12 +139,11 @@ class base_binary_classifier:
         fp_rate = {}
         tn_rate = {}
         fn_rate = {}
-        print(X.shape)
-        print(sensitive_features.shape)
         
         y_pred = self.predict(X, sensitive_features)
         accuracy = 1 - np.sum(np.power(true_Y - y_pred, 2))/len(true_Y) 
 
+        out_dict = {}   # The format is: {group:[tp, fp, tn, fn]}
         for index, group in enumerate(groups):
             indicies = np.where(sensitive_features==group)[0]
             true_class = true_Y[indicies]
@@ -153,17 +163,19 @@ class base_binary_classifier:
             precision = tp / (tp + fp)
             recall = tp / (tp + fn)
             f1 = 2*precision*recall/(precision+recall)
-
             accuracy = 1 - np.sum(np.power(true_class - pred_class, 2))/len(true_class) 
-            print(self.sensitive_features_dict[group], "confusion matrix (Positive is re-offending)")
-            print("\t F1 score: ", f1)
-            print("\t Group Accuracy: ", accuracy)
-            print("\t True positive rate:", tp)
-            print("\t True negative rate:", tn)
-            print("\t False positive rate:", fp)
-            print("\t False negative rate:", fn)
+            out_dict[self.sensitive_features_dict[group]] = [tp, tn, fp, fn, accuracy, f1]
+           
+            if to_print:
+                print(self.sensitive_features_dict[group], "confusion matrix (Positive is good outcome)")
+                print("\t F1 score: ", f1)
+                print("\t Group Accuracy: ", accuracy)
+                print("\t True positive rate:", tp)
+                print("\t True negative rate:", tn)
+                print("\t False positive rate:", fp)
+                print("\t False negative rate:", fn)
         
-        return tp_rate, fp_rate, tn_rate, fn_rate
+        return out_dict
 
 
 
