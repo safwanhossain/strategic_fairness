@@ -40,6 +40,41 @@ class base_binary_classifier:
         y_pred = self.predict(X, sensitive_features)
         return 1 - np.sum(np.power(y_pred - y_true, 2))/len(y_true) 
 
+    def get_test_flips_expectation(self, test_X, sensitive_features_bin, percent=False, to_print=False):
+        # This is currently "only" supported for the soft equalized odds classifier
+        print("WARNING: Only use this if the underlying classifer is a soft equalized odds classifier")
+        groups = np.unique(sensitive_features_bin)
+        indicies = {}
+        for index, group in enumerate(groups):
+            indicies[group] = np.where(sensitive_features_bin==group)[0]
+
+        test_Y = self.predict(test_X, sensitive_features_bin)
+        gain_dict, loss_dict = {}, {}
+        
+        # First lets look at strategic behaviour for group 0
+        for group in range(2):
+            # notice that group will be a number in [0,1]
+            index_g = np.where(sensitive_features_bin == group)[0]
+            honest_results = self.predict(test_X[index_g], np.ones(len(index_g))*group)
+            strategic_results = self.predict(test_X[index_g], np.ones(len(index_g))*(1-group))
+            # those who before were negative but now positive have gained
+            num_gained = np.sum(np.logical_and(honest_results == 0, strategic_results == 1))
+            # those who before were positive but now negative have lost
+            num_lost = np.sum(np.logical_and(honest_results == 1, strategic_results == 0))
+            if percent:
+                gain_dict[group] = num_gained/len(index_g.flatten())
+                loss_dict[group] = num_lost/len(index_g.flatten())
+            else:
+                gain_dict[group] = num_gained
+                loss_dict[group] = num_lost
+            
+            if to_print and percent == False:
+                print("For group ", self.sensitive_features_dict[group], ": ", num_gained, " gained and ", num_lost, " lost")
+            if to_print and percent == True:
+                print("For groups ", self.sensitive_features_dict[group], ": ", num_gained/len(index_g), " gained and ", num_lost/len(index_g), " lost")
+
+        return gain_dict, loss_dict
+
     def get_test_flips(self, test_X, sensitive_features_bin, percent=False, to_print=False):
         # This is for strategic behaviour in fairness.
         # For each sample in the test set, obtain the percentage of people who would
@@ -50,7 +85,7 @@ class base_binary_classifier:
         for index, group in enumerate(groups):
             indicies[group] = np.where(sensitive_features_bin==group)[0]
 
-        test_Y = self.predict(test_X, sensitive_features_bin)
+        test_Y = self.predict(test_X, sensitive_features_bin, sample=True)
         keys = []
         for i in groups:
             for j in groups:
@@ -80,7 +115,7 @@ class base_binary_classifier:
                 curr_group, group = int(curr_group), int(group)
                 new_s = np.array(group).reshape(1,-1)
                 tup = (self.sensitive_features_dict[curr_group], self.sensitive_features_dict[group])
-                new_pred = self.predict(x.reshape(1,-1), new_s)[0]
+                new_pred = self.predict(x.reshape(1,-1), new_s, sample=True)[0]
                 
                 div = 1
                 if percent == True:

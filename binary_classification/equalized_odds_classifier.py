@@ -62,6 +62,7 @@ def main():
     print("Getting confusion mat stats")
     eo_classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train, to_print=True) 
     eo_classifier.get_group_confusion_matrix(sensitive_test_binary, X_test, y_test, to_print=True) 
+    eo_classifier.get_test_flips_expectation(X_test, sensitive_test_binary, percent=True, to_print=True)
 
 if __name__ == "__main__":
     main()
