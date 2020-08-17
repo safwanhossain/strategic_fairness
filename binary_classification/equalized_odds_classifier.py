@@ -1,4 +1,6 @@
 from base_classifier import *
+    e_train, X_test, sensitive_features_train, sensitive_features_test, \
+            y_train, y_test, sensitive_feature_names = get_data_compas(sensitive)
 from tempeh.configurations import datasets
 from erm_classifier import *
 from fairlearn.postprocessing import ThresholdOptimizer

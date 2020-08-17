@@ -62,11 +62,11 @@ class base_binary_classifier:
             # those who before were positive but now negative have lost
             num_lost = np.sum(np.logical_and(honest_results == 1, strategic_results == 0))
             if percent:
-                gain_dict[group] = num_gained/len(index_g.flatten())
-                loss_dict[group] = num_lost/len(index_g.flatten())
+                gain_dict[self.sensitive_features_dict[group]] = num_gained/len(index_g.flatten())
+                loss_dict[self.sensitive_features_dict[group]] = num_lost/len(index_g.flatten())
             else:
-                gain_dict[group] = num_gained
-                loss_dict[group] = num_lost
+                gain_dict[self.sensitive_features_dict[group]]= num_gained
+                loss_dict[self.sensitive_features_dict[group]] = num_lost
             
             if to_print and percent == False:
                 print("For group ", self.sensitive_features_dict[group], ": ", num_gained, " gained and ", num_lost, " lost")

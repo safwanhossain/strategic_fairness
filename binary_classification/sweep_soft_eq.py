@@ -5,14 +5,10 @@ from fairlearn.postprocessing import ThresholdOptimizer
 from prepare_data import *
 from utils import *
 from soft_equalized_odds_classifier import *
-from equalized_odds_classifier import *
 import matplotlib.pyplot as plt
 
-def main():
-    sensitive = "sex"
+def main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive):
     classifer = "logistic"
-    X_train, X_test, sensitive_features_train, sensitive_features_test, \
-            y_train, y_test, sensitive_feature_names = get_data_compas(sensitive)
     if sensitive == "race":
         sensitive_train_binary = convert_to_binary(sensitive_features_train, \
                 sensitive_feature_names[1], sensitive_feature_names[0])
@@ -39,7 +35,7 @@ def main():
         eo_classifier.fit(X_train, y_train, _lambda=lam)
         train_out = eo_classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train) 
         test_out = eo_classifier.get_group_confusion_matrix(sensitive_test_binary, X_test, y_test) 
-        gain_dict, loss_dict = eo_classifier.get_test_flips(X_test, sensitive_test_binary, percent=True)
+        gain_dict, loss_dict = eo_classifier.get_test_flips_expectation(X_test, sensitive_test_binary, percent=True)
         print(gain_dict, loss_dict)
         tp_vals_delta[i] = np.abs(train_out[sensitive_features_dict[0]][0] - train_out[sensitive_features_dict[1]][0])
         fp_vals_delta[i] = np.abs(train_out[sensitive_features_dict[0]][1] - train_out[sensitive_features_dict[1]][1])
@@ -67,6 +63,9 @@ def main():
     plt.savefig("group_1_sp.png")
 
 if __name__ == "__main__":
-    main()
+    sensitive = "race"
+    X_train, X_test, sensitive_features_train, sensitive_features_test, \
+            y_train, y_test, sensitive_feature_names = get_data_income(sensitive, rebalance="both")
+    main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive)
 
 

@@ -12,9 +12,9 @@ NUM_SAMPLES = 100
 class soft_equalized_odds_classifier(base_binary_classifier):
     def fit(self, train_X, train_Y, _classifier_name="logistic", _predictor="hard", _lambda=0.5, verbose=False):
         # First, create the base classifier, and get its predictions
-        self.base_erm_classifier = erm_classifier(self.train_X, self.train_Y)
+        self.base_erm_classifier = erm_classifier(self.train_X, self.train_Y, self.sensitive_train)
         self.base_erm_classifier.fit(self.train_X, self.train_Y, classifier_name=_classifier_name)
-        y_pred_train = self.base_erm_classifier.predict(train_X)
+        y_pred_train = self.base_erm_classifier.predict(train_X, self.sensitive_train)
         y_true_train = train_Y
         group_train = self.sensitive_train
         
@@ -101,7 +101,7 @@ class soft_equalized_odds_classifier(base_binary_classifier):
         """
         # get the base predictions from the base classifier
         assert(self.trained == True)
-        y_pred_test = self.base_erm_classifier.predict(X_vals)
+        y_pred_test = self.base_erm_classifier.predict(X_vals, group_test)
         eq_odd_pred_test=np.copy(y_pred_test)
        
         test_ind_y1_g0=np.logical_and(y_pred_test == 1, group_test == 0)
@@ -128,7 +128,7 @@ class soft_equalized_odds_classifier(base_binary_classifier):
         """
         # get the base predictions from the base classifier
         assert(self.trained == True)
-        y_pred_test = self.base_erm_classifier.predict(X_vals)
+        y_pred_test = self.base_erm_classifier.predict(X_vals, group_test)
         eq_odd_pred_test=np.copy(y_pred_test)
 
         test_ind_y1_g0=np.logical_and(y_pred_test == 1, group_test == 0)
