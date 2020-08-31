@@ -50,16 +50,16 @@ def get_data_lawschool(sensitive, get_stats=False, rebalance=None):
     if rebalance == None:
         pass
     elif rebalance == "labels":
-        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_data_labels(X_train, y_train, sensitive_features_train, \
-                X_test, y_test, sensitive_features_test)
+        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_data(X_train, y_train, sensitive_features_train, \
+                X_test, y_test, sensitive_features_test, "labels")
     elif rebalance == "race":
-        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_groups(X_train, y_train, sensitive_features_train, \
-            X_test, y_test, sensitive_features_test)
+        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_data(X_train, y_train, sensitive_features_train, \
+            X_test, y_test, sensitive_features_test, "groups")
     elif rebalance == "both" and sensitive == "race":
-        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_groups(X_train, y_train, sensitive_features_train, \
-            X_test, y_test, sensitive_features_test)
-        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_data_labels(X_train, y_train, sensitive_features_train, \
-                X_test, y_test, sensitive_features_test)
+        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_data(X_train, y_train, sensitive_features_train, \
+            X_test, y_test, sensitive_features_test, "labels")
+        X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test = rebalance_data(X_train, y_train, sensitive_features_train, \
+                X_test, y_test, sensitive_features_test, "groups")
     else:
         print("--------------ERROR---------------")
         return
@@ -107,16 +107,16 @@ def get_data_income(s_attr, get_stats=False, rebalance=None):
     if rebalance == None:
         pass
     elif rebalance == "labels":
-        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_data_labels(X_train, y_train, sen_train, \
-                X_test, y_test, sen_test)
+        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_data(X_train, y_train, sen_train, \
+                X_test, y_test, sen_test, "labels")
     elif rebalance == "race":
-        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_groups(X_train, y_train, sen_train, \
-            X_test, y_test, sen_test)
+        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_data(X_train, y_train, sen_train, \
+            X_test, y_test, sen_test, "groups")
     elif rebalance == "both" and s_attr == "race":
-        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_groups(X_train, y_train, sen_train, \
-            X_test, y_test, sen_test)
-        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_data_labels(X_train, y_train, sen_train, \
-                X_test, y_test, sen_test)
+        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_data(X_train, y_train, sen_train, \
+            X_test, y_test, sen_test, "labels")
+        X_train, y_train, sen_train, X_test, y_test, sen_test = rebalance_data(X_train, y_train, sen_train, \
+                X_test, y_test, sen_test, "groups")
     else:
         print("--------------ERROR---------------")
         return
@@ -127,21 +127,76 @@ def get_data_income(s_attr, get_stats=False, rebalance=None):
     return X_train, X_test, sen_train, sen_test, y_train.astype("int"), y_test.astype("int"), \
             sensitive_feature_names
 
-if __name__ == "__main__":
+def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None):
+    def oneHotCatVars(df, df_cols):
+        df_1 = adult_data = df.drop(columns = df_cols, axis = 1)
+        df_2 = pd.get_dummies(df[df_cols])
+        return (pd.concat([df_1, df_2], axis=1, join='inner'))
+    
+    s_dict = {'sex': 1, 'Pstatus':5, 'famsup':16}
+    if subject == "math":
+        filename = 'student_dataset/student-mat.csv'
+    else:
+        filename = 'student_dataset/student-por.csv'
+    dataframe = pd.read_csv(filename, header=None, sep=";", na_values='?')
+    dataframe = dataframe.dropna()
+
+    last_ix = len(dataframe.columns) - 1
+    X, y = dataframe.drop(last_ix, axis=1), dataframe[last_ix]
+    y = LabelEncoder().fit_transform(y)
+
+    X, sensitive = X.drop(s_dict[s_attr], axis=1), X[s_dict[s_attr]]
+    X = oneHotCatVars(X, X.select_dtypes('object').columns)
+    
+    X, sen, y = X.to_numpy(), sensitive.to_numpy().reshape(-1,1), y.reshape(-1,1)
+    all_f = np.concatenate([X, sen, y], axis=1)
+    np.random.shuffle(all_f)
+
+    train_len = int(0.7*len(y))
+    X_train, sen_train, y_train = all_f[:train_len, :-2], all_f[:train_len, -2], all_f[:train_len, -1].flatten()
+    X_test, sen_test, y_test = all_f[train_len:, :-2], all_f[train_len:, -2], all_f[train_len:, -1].flatten()
+    
+    if s_attr == "sex":
+        sensitive_feature_names = ["F", "M"]
+    if s_attr == "Pstatus":
+        sensitive_feature_names = ["A", "T"]
+    if s_attr == "famsup":
+        sensitive_feature_names = ["no", "yes"]
+
+    new_y_train, new_y_test = np.zeros(len(y_train)), np.zeros(len(y_test))
+    new_y_train[np.where(y_train >= 10)[0]] = 1
+    new_y_test[np.where(y_test >= 10)[0]] = 1
+
+    return X_train, X_test, sen_train, sen_test, new_y_train, new_y_test, \
+            sensitive_feature_names
+
+def test_balancing():
     print("------------------------- COMPAS DATASET ------------------------------")
     get_data_compas("race", get_stats=True)
     print("\n")
     get_data_compas("sex", get_stats=True)
     
     print("\n\n------------------------- LAW SCHOOL DATASET ------------------------------")
+    get_data_lawschool("race", get_stats=True, rebalance=None)
+    print("\n")
+    get_data_lawschool("sex", get_stats=True, rebalance=None)
+    print("\n")
     get_data_lawschool("race", get_stats=True, rebalance="both")
     print("\n")
     get_data_lawschool("sex", get_stats=True, rebalance="labels")
     
     print("\n\n------------------------- INCOME DATASET ------------------------------")
+    get_data_income("race", get_stats=True, rebalance=None)
+    print("\n")
+    get_data_income("sex", get_stats=True, rebalance=None)
+    print("\n")
     get_data_income("race", get_stats=True, rebalance="both")
     print("\n")
     get_data_income("sex", get_stats=True, rebalance="labels")
 
-
+if __name__ == "__main__":
+    X_train, X_test, sensitive_features_train, sensitive_features_test, y_train, y_test, \
+            sensitive_feature_names = get_data_student("sex", get_stats=True)
+    
+    sorted_features = rank_features_by_IG(X_train, y_train)
 

@@ -9,17 +9,13 @@ import matplotlib.pyplot as plt
 
 def main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive):
     classifer = "logistic"
-    if sensitive == "race":
-        sensitive_train_binary = convert_to_binary(sensitive_features_train, \
-                sensitive_feature_names[1], sensitive_feature_names[0])
-        sensitive_test_binary = convert_to_binary(sensitive_features_test, \
-                sensitive_feature_names[1], sensitive_feature_names[0])
-    else:
-        sensitive_train_binary, sensitive_test_binary = sensitive_features_train, \
-                sensitive_features_test
-    sensitive_features_dict = {0:sensitive_feature_names[0], 1:sensitive_feature_names[1]}
-    print(sensitive_features_dict)
+    sensitive_train_binary = convert_to_binary(sensitive_features_train, \
+            sensitive_feature_names[1], sensitive_feature_names[0])
+    sensitive_test_binary = convert_to_binary(sensitive_features_test, \
+            sensitive_feature_names[1], sensitive_feature_names[0])
     
+    sensitive_features_dict = {0:sensitive_feature_names[0], 1:sensitive_feature_names[1]}
+
     num_steps = 10
     lambda_vals = [0 + i*1.0/num_steps for i in range(num_steps + 1)]
     tp_vals_delta = [0 for i in range(num_steps + 1)]
@@ -51,21 +47,27 @@ def main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_f
     plt.savefig("error_plots.png")
     
     plt.figure()
-    plt.plot(lambda_vals, gain_0, color='r', linestyle='-', label=sensitive_features_dict[0]+"Gain")
-    plt.plot(lambda_vals, loss_0, color='b', linestyle='-', label=sensitive_features_dict[0]+"Loss")
+    delta_gain_0 = np.array(gain_0) - np.array(loss_0)
+    delta_gain_1 = np.array(gain_1) - np.array(loss_1)
+    plt.plot(lambda_vals, delta_gain_0, color='r', linestyle='-', label=sensitive_features_dict[0]+" Delta Gain")
+    plt.plot(lambda_vals, delta_gain_1, color='b', linestyle='-', label=sensitive_features_dict[1]+" Delta Gain")
     plt.legend()
-    plt.savefig("group_0_sp.png")
+    plt.savefig("strategic_gain.png")
     
-    plt.figure()
-    plt.plot(lambda_vals, gain_1, color='r', linestyle='-', label=sensitive_features_dict[1]+"Gain")
-    plt.plot(lambda_vals, loss_1, color='b', linestyle='-', label=sensitive_features_dict[1]+"Loss")
-    plt.legend()
-    plt.savefig("group_1_sp.png")
+    #plt.figure()
+    #plt.plot(lambda_vals, gain_1, color='r', linestyle='-', label=sensitive_features_dict[1]+"Gain")
+    #plt.plot(lambda_vals, loss_1, color='b', linestyle='-', label=sensitive_features_dict[1]+"Loss")
+    #plt.legend()
+    #plt.savefig("group_1_sp.png")
 
 if __name__ == "__main__":
-    sensitive = "race"
+    sensitive = "famsup"
     X_train, X_test, sensitive_features_train, sensitive_features_test, \
-            y_train, y_test, sensitive_feature_names = get_data_income(sensitive, rebalance="both")
+            y_train, y_test, sensitive_feature_names = get_data_student(sensitive)
+    print(sensitive_features_train) 
+    y_train, y_test = y_train.astype("int"), y_test.astype("int")
+    print(len(y_test), sum(y_train))
+    print(len(y_test), sum(y_test))
     main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive)
 
 

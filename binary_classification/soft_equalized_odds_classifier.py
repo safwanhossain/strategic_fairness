@@ -17,7 +17,7 @@ class soft_equalized_odds_classifier(base_binary_classifier):
         y_pred_train = self.base_erm_classifier.predict(train_X, self.sensitive_train)
         y_true_train = train_Y
         group_train = self.sensitive_train
-        
+
         assert np.array_equal(np.unique(y_true_train),np.array([0,1])), 'y_true_train has to contain 0 and 1 and only these'
         assert np.array_equal(np.unique(y_pred_train),np.array([0,1])), 'y_pred_train has to contain 0 and 1 and only these'
         assert np.array_equal(np.unique(group_train),np.array([0,1])), 'group_train has to contain 0 and 1 and only these'
