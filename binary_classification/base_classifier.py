@@ -166,7 +166,7 @@ class base_binary_classifier:
         
     def get_group_confusion_matrix(self, sensitive_features, X, true_Y, to_print=False):
         # For a trained classifier, get the true positive and true negative rates based on
-        # group identity. Dobased on groups (currently only works for binary)
+        # group identity. Do based on groups (currently only works for binary)
         # sensitive_index is the index of the sensitive attribute.
         groups = np.unique(sensitive_features)
         n_groups = len(groups)

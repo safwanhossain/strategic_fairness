@@ -70,13 +70,21 @@ def get_data_lawschool(sensitive, get_stats=False, rebalance=None):
     return X_train, X_test, sensitive_features_train, sensitive_features_test, y_train, y_test, \
             sensitive_feature_names
 
+def oneHotCatVars(df, df_cols):
+    df_1 = adult_data = df.drop(columns = df_cols, axis = 1)
+    df_2 = pd.get_dummies(df[df_cols])
+    return (pd.concat([df_1, df_2], axis=1, join='inner'))
 
-def get_data_income(s_attr, get_stats=False, rebalance=None):
-    def oneHotCatVars(df, df_cols):
-        df_1 = adult_data = df.drop(columns = df_cols, axis = 1)
-        df_2 = pd.get_dummies(df[df_cols])
-        return (pd.concat([df_1, df_2], axis=1, join='inner'))
-    
+def get_train_test_split(X, y, sensitive, ratio=0.7):
+    all_f = np.concatenate([X, sensitive, y], axis=1)
+    np.random.shuffle(all_f)
+
+    train_len = int(ratio*len(y))
+    X_train, sen_train, y_train = all_f[:train_len, :-2], all_f[:train_len, -2], all_f[:train_len, -1].flatten()
+    X_test, sen_test, y_test = all_f[train_len:, :-2], all_f[train_len:, -2], all_f[train_len:, -1].flatten()
+    return X_train, sen_train ,y_train, X_test, sen_test, y_test
+
+def get_data_income(s_attr, get_stats=False, rebalance=None, raw=False, drop=[]):
     s_dict = {'race': 8, 'sex':9}
     filename = 'adult-all.csv'
     dataframe = pd.read_csv(filename, header=None, na_values='?')
@@ -84,25 +92,25 @@ def get_data_income(s_attr, get_stats=False, rebalance=None):
 
     last_ix = len(dataframe.columns) - 1
     X, y = dataframe.drop(last_ix, axis=1), dataframe[last_ix]
-    y = LabelEncoder().fit_transform(y)
-
-    X, sensitive = X.drop(s_dict[s_attr], axis=1), X[s_dict[s_attr]]
-    X = oneHotCatVars(X, X.select_dtypes('object').columns)
-    
-    X, sen, y = X.to_numpy(), sensitive.to_numpy().reshape(-1,1), y.reshape(-1,1)
-    all_f = np.concatenate([X,sen, y], axis=1)
-    np.random.shuffle(all_f)
-
-    train_len = int(0.7*len(y))
-    X_train, sen_train, y_train = all_f[:train_len, :-2], all_f[:train_len, -2], all_f[:train_len, -1].flatten()
-    X_test, sen_test, y_test = all_f[train_len:, :-2], all_f[train_len:, -2], all_f[train_len:, -1].flatten()
+    y = LabelEncoder().fit_transform(y).reshape(-1,1)
+    X, sensitive = X.drop(s_dict[s_attr], axis=1), X[s_dict[s_attr]].to_numpy().reshape(-1,1)
     
     if s_attr == "race":
         sensitive_feature_names = ["Not White", "White"]
-        sen_train[np.where(sen_train!="White")[0]] = "Not White"
-        sen_test[np.where(sen_test!="White")[0]] = "Not White"
+        sensitive[np.where(sensitive!="White")[0]] = "Not White"
     if s_attr == "sex":
         sensitive_feature_names = ["Female", "Male"]
+    if raw == True:
+        return X, sensitive, y, sensitive_feature_names
+
+    if len(drop) != 0:
+        print("Before shape: ", X.shape)
+        X = X.drop(X.columns[drop], axis=1)
+        print("After shape: ", X.shape)
+
+
+    X = oneHotCatVars(X, X.select_dtypes('object').columns).to_numpy()
+    X_train, sen_train, y_train, X_test, sen_test, y_test = get_train_test_split(X, y, sensitive)
     
     if rebalance == None:
         pass
@@ -127,12 +135,7 @@ def get_data_income(s_attr, get_stats=False, rebalance=None):
     return X_train, X_test, sen_train, sen_test, y_train.astype("int"), y_test.astype("int"), \
             sensitive_feature_names
 
-def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None):
-    def oneHotCatVars(df, df_cols):
-        df_1 = adult_data = df.drop(columns = df_cols, axis = 1)
-        df_2 = pd.get_dummies(df[df_cols])
-        return (pd.concat([df_1, df_2], axis=1, join='inner'))
-    
+def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None, raw=False, drop=[]):
     s_dict = {'sex': 1, 'Pstatus':5, 'famsup':16}
     if subject == "math":
         filename = 'student_dataset/student-mat.csv'
@@ -143,18 +146,29 @@ def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None):
 
     last_ix = len(dataframe.columns) - 1
     X, y = dataframe.drop(last_ix, axis=1), dataframe[last_ix]
-    y = LabelEncoder().fit_transform(y)
-
-    X, sensitive = X.drop(s_dict[s_attr], axis=1), X[s_dict[s_attr]]
-    X = oneHotCatVars(X, X.select_dtypes('object').columns)
+    y = LabelEncoder().fit_transform(y).reshape(-1, 1)
+    X, sensitive = X.drop(s_dict[s_attr], axis=1), X[s_dict[s_attr]].to_numpy().reshape(-1,1)
     
-    X, sen, y = X.to_numpy(), sensitive.to_numpy().reshape(-1,1), y.reshape(-1,1)
-    all_f = np.concatenate([X, sen, y], axis=1)
-    np.random.shuffle(all_f)
+    if s_attr == "sex":
+        sensitive_feature_names = ["F", "M"]
+    if s_attr == "Pstatus":
+        sensitive_feature_names = ["A", "T"]
+    if s_attr == "famsup":
+        sensitive_feature_names = ["no", "yes"]
+   
+    new_y = np.zeros(len(y))
+    new_y[np.where(y >= 10)[0]] = 1
+    new_y = new_y.reshape(-1,1)
 
-    train_len = int(0.7*len(y))
-    X_train, sen_train, y_train = all_f[:train_len, :-2], all_f[:train_len, -2], all_f[:train_len, -1].flatten()
-    X_test, sen_test, y_test = all_f[train_len:, :-2], all_f[train_len:, -2], all_f[train_len:, -1].flatten()
+    if raw == True:
+        return X, sensitive, new_y, sensitive_feature_names
+    if len(drop) != 0:
+        print("Before shape: ", X.shape)
+        X = X.drop(X.columns[drop], axis=1)
+        print("After shape: ", X.shape)
+    
+    X = oneHotCatVars(X, X.select_dtypes('object').columns).to_numpy()
+    X_train, sen_train, y_train, X_test, sen_test, y_test = get_train_test_split(X, new_y, sensitive)
     
     if s_attr == "sex":
         sensitive_feature_names = ["F", "M"]
@@ -163,11 +177,7 @@ def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None):
     if s_attr == "famsup":
         sensitive_feature_names = ["no", "yes"]
 
-    new_y_train, new_y_test = np.zeros(len(y_train)), np.zeros(len(y_test))
-    new_y_train[np.where(y_train >= 10)[0]] = 1
-    new_y_test[np.where(y_test >= 10)[0]] = 1
-
-    return X_train, X_test, sen_train, sen_test, new_y_train, new_y_test, \
+    return X_train, X_test, sen_train, sen_test, y_train, y_test, \
             sensitive_feature_names
 
 def test_balancing():

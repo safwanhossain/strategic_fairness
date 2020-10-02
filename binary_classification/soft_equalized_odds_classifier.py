@@ -18,8 +18,6 @@ class soft_equalized_odds_classifier(base_binary_classifier):
         y_true_train = train_Y
         group_train = self.sensitive_train
 
-        assert np.array_equal(np.unique(y_true_train),np.array([0,1])), 'y_true_train has to contain 0 and 1 and only these'
-        assert np.array_equal(np.unique(y_pred_train),np.array([0,1])), 'y_pred_train has to contain 0 and 1 and only these'
         assert np.array_equal(np.unique(group_train),np.array([0,1])), 'group_train has to contain 0 and 1 and only these'
 
         tp0=np.sum(np.logical_and(y_pred_train==1,np.logical_and(y_true_train == 1, group_train == 0))) / float(
@@ -75,6 +73,7 @@ class soft_equalized_odds_classifier(base_binary_classifier):
             prob.solve()
         except:
             print("You done goofed up")
+            return False
 
         self.p2p0, self.n2p0, self.p2p1, self.n2p1 = min(max(0, p2p0.value[0]), 1), min(max(0, n2p0.value[0]), 1), min(max(p2p1.value[0], 0), 1), min(max(n2p1.value[0],0), 1)
         self.n2n0, self.p2n0, self.n2n1, self.p2n1 = min(max(0, n2n0.value[0]), 1), min(max(0, p2n0.value[0]), 1), min(max(n2n1.value[0], 0), 1), min(max(p2n1.value[0],0), 1)
@@ -93,7 +92,7 @@ class soft_equalized_odds_classifier(base_binary_classifier):
         
         if verbose:
             print("Lambda: ", _lambda, " The E[group specific rates] are (TPR0, TRP1, FPR0, FPR1):", tpr0, tpr1, fpr0, fpr1)
-        return 
+        return True
 
     def _predict_sample(self, X_vals, group_test):
         """ In this prediction, we sample a biased coin wp equal to the flipping rates and stochastically decide if we want to flip

@@ -7,7 +7,8 @@ from utils import *
 from soft_equalized_odds_classifier import *
 import matplotlib.pyplot as plt
 
-def main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive):
+
+def main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive_feature_names):
     classifer = "logistic"
     sensitive_train_binary = convert_to_binary(sensitive_features_train, \
             sensitive_feature_names[1], sensitive_feature_names[0])
@@ -61,13 +62,16 @@ def main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_f
     #plt.savefig("group_1_sp.png")
 
 if __name__ == "__main__":
-    sensitive = "famsup"
+    sensitive = "Pstatus"
     X_train, X_test, sensitive_features_train, sensitive_features_test, \
-            y_train, y_test, sensitive_feature_names = get_data_student(sensitive)
+            y_train, y_test, sensitive_feature_names = get_data_student(sensitive, drop=[23,28,30])
+    print(X_train.shape)
+
     print(sensitive_features_train) 
     y_train, y_test = y_train.astype("int"), y_test.astype("int")
     print(len(y_test), sum(y_train))
     print(len(y_test), sum(y_test))
     main(X_train, y_train, sensitive_features_train, X_test, y_test, sensitive_features_test, sensitive)
+
 
 
