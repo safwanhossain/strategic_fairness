@@ -19,7 +19,7 @@ class base_binary_classifier:
         print("Not Implemented!")
         pass
 
-    def predict(self, samples, sensitive_features=None):
+    def predict(self, samples, sensitive_features=None, sample=None):
         # predict the outcome of the model on the given samples. If samples
         # is none, then the self.test_data will be used
         # return the loss as well as the predictions
@@ -41,9 +41,13 @@ class base_binary_classifier:
         return 1 - np.sum(np.power(y_pred - y_true, 2))/len(y_true) 
 
     def get_test_flips_expectation(self, test_X, sensitive_features_bin, percent=False, to_print=False):
-        # This is currently "only" supported for the soft equalized odds classifier
+        """ Given a bunch of test samples and sensitive features, return the proportion of 
+        individuals who would benefit from flipping their attributes. This is meant to be used
+        for a soft/probabilistic classifier 
+        """
         print("WARNING: Only use this if the underlying classifer is a soft equalized odds classifier")
         groups = np.unique(sensitive_features_bin)
+        assert(len(groups) == 2)
         indicies = {}
         for index, group in enumerate(groups):
             indicies[group] = np.where(sensitive_features_bin==group)[0]
@@ -52,7 +56,7 @@ class base_binary_classifier:
         gain_dict, loss_dict = {}, {}
         
         # First lets look at strategic behaviour for group 0
-        for group in range(2):
+        for group in range(len(groups)):
             # notice that group will be a number in [0,1]
             index_g = np.where(sensitive_features_bin == group)[0]
             honest_results = self.predict(test_X[index_g], np.ones(len(index_g))*group)
@@ -71,7 +75,7 @@ class base_binary_classifier:
             if to_print and percent == False:
                 print("For group ", self.sensitive_features_dict[group], ": ", num_gained, " gained and ", num_lost, " lost")
             if to_print and percent == True:
-                print("For groups ", self.sensitive_features_dict[group], ": ", num_gained/len(index_g), " gained and ", num_lost/len(index_g), " lost")
+                print("For groups ", self.sensitive_features_dict[group], ": ", 100*(num_gained/len(index_g)), " gained and ", 100*(num_lost/len(index_g)), " lost")
 
         return gain_dict, loss_dict
 
@@ -79,7 +83,8 @@ class base_binary_classifier:
         # This is for strategic behaviour in fairness.
         # For each sample in the test set, obtain the percentage of people who would
         # benefit by flipping and those that would not.
-        
+        print("================ Please use get_test_flips_expectation(). \
+                This should only be for debugging ===============")   
         groups = np.unique(sensitive_features_bin)
         indicies = {}
         for index, group in enumerate(groups):
@@ -117,18 +122,18 @@ class base_binary_classifier:
                 tup = (self.sensitive_features_dict[curr_group], self.sensitive_features_dict[group])
                 new_pred = self.predict(x.reshape(1,-1), new_s, sample=True)[0]
                 
-                div = 1
+                div, mult = 1, 1
                 if percent == True:
-                    div = len(indicies[curr_group]) 
+                    div, mult = len(indicies[curr_group]), 100
                 # gaining by flipping
                 if y == 0 and new_pred == 1:
-                    gain_flips[tup] += 1/div
-                    gain_dict[self.sensitive_features_dict[curr_group]] += 1/div
+                    gain_flips[tup] += (1/div)*mult
+                    gain_dict[self.sensitive_features_dict[curr_group]] += (1/div)*mult
 
                 # lose by flipping
                 if y == 1 and new_pred == 0:
-                    loss_flips[tup] += 1/div
-                    loss_dict[self.sensitive_features_dict[curr_group]] += 1/div
+                    loss_flips[tup] += (1/div)*mult
+                    loss_dict[self.sensitive_features_dict[curr_group]] += (1/div)*mult
       
         if to_print:
             print("Those gaining by flipping attributes: ", gain_flips)

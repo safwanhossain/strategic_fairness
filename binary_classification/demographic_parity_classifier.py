@@ -1,61 +1,270 @@
+import cvxpy as cvx
 from base_classifier import *
 from tempeh.configurations import datasets
 from erm_classifier import *
-from fairlearn.postprocessing import ThresholdOptimizer
 from prepare_data import *
 from utils import *
 
 NUM_SAMPLES = 100
 
 class demographic_parity_classifier(base_binary_classifier):
-    def fit(self, _X, _Y, _classifier_name="logistic", _predictor="hard"):
-        my_erm_classifier = erm_classifier(self.train_X, self.train_Y)
-        my_erm_classifier.fit(self.train_X, self.train_Y, classifier_name=_classifier_name)
-        self.model = ThresholdOptimizer(estimator=my_erm_classifier, \
-                constraints="demographic_parity", prefit=True)
-        self.model.fit(self.train_X, self.train_Y, \
-                sensitive_features=self.sensitive_train, _predictor=_predictor) 
-    
-    def predict(self, x_samples, sensitive_features):
-        y_samples = self.model.predict(x_samples, sensitive_features=sensitive_features)
-        return y_samples
-    
-    def get_accuracy(self, X, y_true, sensitive_features):
-        y_pred = self.predict(X, sensitive_features)
-        return 1 - np.sum(np.power(y_pred - y_true, 2))/len(y_true) 
+    def fit(self, _classifier_name="logistic",
+            _fairness="hard", _lambda=0.5,
+            verbose=False, use_group_in_base_classifier=True):
 
-    def predict_proba(self, x_samples, sensitive_features):
-        y_samples = self.model._pmf_predict(x_samples, sensitive_features=sensitive_features)
-        return y_samples
+        # First, create the base classifier, and get its predictions
+        self.use_group_in_base_classifier = use_group_in_base_classifier
+        if self.use_group_in_base_classifier:
+            self.base_erm_classifier = erm_classifier(self.train_X, self.train_Y, self.sensitive_train)
+            self.base_erm_classifier.fit(classifier_name=_classifier_name)
+            y_pred_train = self.base_erm_classifier.predict(self.train_X, self.sensitive_train)
+        y_true_train = self.train_Y
+        group_train = self.sensitive_train
+   
+        num_group_0 = len(np.where(group_train == 0)[0]) 
+        num_group_1 = len(np.where(group_train == 1)[0])
+ 
+        assert np.array_equal(np.unique(y_true_train),np.array([0,1])), 'y_true_train has to contain -1 and 1 and only these'
+        assert np.array_equal(np.unique(y_pred_train),np.array([0,1])), 'y_pred_train has to contain -1 and 1 and only these'
+        
+        # If this is set True, _lambda is ignored and EQ is implmented hard
+        self._fairness = _fairness        
 
-def main():
+        assert np.array_equal(np.unique(group_train),np.array([0,1])), 'group_train has to contain 0 and 1 and only these'
+
+        tp0=np.sum(np.logical_and(y_pred_train==1,np.logical_and(y_true_train == 1, group_train == 0))) / float(
+            np.sum(np.logical_and(y_true_train == 1, group_train == 0)))
+        tp1 = np.sum(np.logical_and(y_pred_train == 1, np.logical_and(y_true_train == 1, group_train == 1))) / float(
+            np.sum(np.logical_and(y_true_train == 1, group_train == 1)))
+        fp0 = np.sum(np.logical_and(y_pred_train == 1, np.logical_and(y_true_train == 0, group_train == 0))) / float(
+            np.sum(np.logical_and(y_true_train == 0, group_train == 0)))
+        fp1 = np.sum(np.logical_and(y_pred_train == 1, np.logical_and(y_true_train == 0, group_train == 1))) / float(
+            np.sum(np.logical_and(y_true_train == 0, group_train == 1)))
+        fn0 = 1 - tp0
+        fn1 = 1 - tp1
+        tn0 = 1 - fp0
+        tn1 = 1 - fp1
+    
+        p2p0 = cvx.Variable(1)
+        p2n0 = cvx.Variable(1)
+        n2p0 = cvx.Variable(1)
+        n2n0 = cvx.Variable(1)
+        p2p1 = cvx.Variable(1)
+        p2n1 = cvx.Variable(1)
+        n2p1 = cvx.Variable(1)
+        n2n1 = cvx.Variable(1)
+        
+        fpr0 = fp0 * p2p0 + tn0 * n2p0
+        fnr0 = fn0 * n2n0 + tp0 * p2n0
+        fpr1 = fp1 * p2p1 + tn1 * n2p1
+        fnr1 = fn1 * n2n1 + tp1 * p2n1
+        tpr0 = 1 - fnr0
+        tpr1 = 1 - fnr1
+        tnr0 = 1 - fpr0
+        tnr1 = 1 - fpr1
+        
+        error = fpr0 + fnr0 + fpr1 + fnr1
+        constraints = [
+            p2p0 == 1 - p2n0,
+            n2p0 == 1 - n2n0,
+            p2p1 == 1 - p2n1,
+            n2p1 == 1 - n2n1,
+            p2p0 <= 1,
+            p2p0 >= 0,
+            n2p0 <= 1,
+            n2p0 >= 0,
+            p2p1 <= 1,
+            p2p1 >= 0,
+            n2p1 <= 1,
+            n2p1 >= 0
+        ]
+        
+        gt_group0_pos = np.sum(np.logical_and(y_true_train == 1, group_train == 0))
+        gt_group1_pos = np.sum(np.logical_and(y_true_train == 1, group_train == 1))
+        gt_group0_neg = np.sum(np.logical_and(y_true_train == 0, group_train == 0))
+        gt_group1_neg = np.sum(np.logical_and(y_true_train == 0, group_train == 1))
+        
+        if self._fairness == "hard":
+            constraints.append((tpr0*gt_group0_pos+fpr0*gt_group0_neg)/num_group_0 == \
+                    (tpr1*gt_group1_pos+fpr1*gt_group1_neg)/num_group_1)
+            prob = cvx.Problem(cvx.Minimize(error), constraints)
+        else:
+            group_0_rate = (tpr0*gt_group0_pos+fpr0*gt_group0_neg)/num_group_0
+            group_1_rate = (tpr1*gt_group1_pos+fpr1*gt_group1_neg)/num_group_1
+            penalty = cvx.abs(group_0_rate - group_1_rate)
+            prob = cvx.Problem(cvx.Minimize(error + _lambda*penalty), constraints)
+        
+        try:
+            prob.solve()
+        except:
+            print("You done goofed up")
+            return False
+
+        self.p2p0, self.n2p0, self.p2p1, self.n2p1 = min(max(0, p2p0.value[0]), 1), min(max(0, n2p0.value[0]), 1), min(max(p2p1.value[0], 0), 1), min(max(n2p1.value[0],0), 1)
+        self.n2n0, self.p2n0, self.n2n1, self.p2n1 = min(max(0, n2n0.value[0]), 1), min(max(0, p2n0.value[0]), 1), min(max(n2n1.value[0], 0), 1), min(max(p2n1.value[0],0), 1)
+        if verbose:
+            print(self.p2p0, self.n2p0, self.p2p1, self.n2p1)
+        self.trained = True
+
+        fpr0 = fp0 * self.p2p0 + tn0 * self.n2p0
+        fnr0 = fn0 * self.n2n0 + tp0 * self.p2n0
+        fpr1 = fp1 * self.p2p1 + tn1 * self.n2p1
+        fnr1 = fn1 * self.n2n1 + tp1 * self.p2n1
+        tpr0 = 1 - fnr0
+        tpr1 = 1 - fnr1
+        tnr0 = 1 - fpr0
+        tnr1 = 1 - fpr1
+        
+        if verbose:
+            print("Group 0") 
+            print("\t True positive rate:", tpr0)
+            print("\t True negative rate:", tnr0)
+            print("\t False positive rate:", fpr0)
+            print("\t False negative rate:", fnr0)
+            
+            print("Group 1") 
+            print("\t True positive rate:", tpr1)
+            print("\t True negative rate:", tnr1)
+            print("\t False positive rate:", fpr1)
+            print("\t False negative rate:", fnr1)
+
+            print(" The E[group specific rates] group 0 PR is: ", (tpr0*gt_group0_pos+fpr0*gt_group0_neg)/num_group_0)
+            print(" The E[group specific rates] group 1 PR is: ", (tpr1*gt_group1_pos+fpr1*gt_group1_neg)/num_group_1)
+
+        return True
+
+    def _predict_sample(self, X_vals, group_test):
+        """ In this prediction, we sample a biased coin wp equal to the flipping rates and stochastically decide if we want to flip
+        a candidate or not. NOTE: If you use this, individual predictions ARE meaningful
+        """
+        # get the base predictions from the base classifier
+        assert(self.trained == True)
+        y_pred_test = self.base_erm_classifier.predict(X_vals, group_test)
+        eq_odd_pred_test=np.copy(y_pred_test)
+       
+        test_ind_y1_g0=np.logical_and(y_pred_test == 1, group_test == 0)
+        to_flip=np.random.choice(np.array([0,1]),size=np.sum(test_ind_y1_g0),p=np.array([self.p2p0,1-self.p2p0]))
+        eq_odd_pred_test[np.where(test_ind_y1_g0)[0][to_flip==1]]=0
+
+        test_ind_y1_g1=np.logical_and(y_pred_test == 1, group_test == 1)
+        to_flip=np.random.choice(np.array([0,1]),size=np.sum(test_ind_y1_g1),p=np.array([self.p2p1,1-self.p2p1]))
+        eq_odd_pred_test[np.where(test_ind_y1_g1)[0][to_flip==1]]=0
+        
+        test_ind_y0_g0=np.logical_and(y_pred_test == 0, group_test == 0)
+        to_flip=np.random.choice(np.array([0,1]),size=np.sum(test_ind_y0_g0),p=np.array([1-self.n2p0,self.n2p0]))
+        eq_odd_pred_test[np.where(test_ind_y0_g0)[0][to_flip==1]]=1
+        
+        test_ind_y0_g1=np.logical_and(y_pred_test == 0, group_test == 1)
+        to_flip=np.random.choice(np.array([0,1]),size=np.sum(test_ind_y0_g1),p=np.array([1-self.n2p1,self.n2p1]))
+        eq_odd_pred_test[np.where(test_ind_y0_g1)[0][to_flip==1]]=1
+
+        return eq_odd_pred_test
+
+    def _predict_expectation(self, X_vals, group_test):
+        """ In this prediction, we decide to flip the outcome of a candidate based on the expected flips for their group.
+        NOTE: This function only works in aggregate and if using this, any individual prediction is totally meaningless.
+        """
+        # get the base predictions from the base classifier
+        assert(self.trained == True)
+        y_pred_test = self.base_erm_classifier.predict(X_vals, group_test)
+        eq_odd_pred_test=np.copy(y_pred_test)
+
+        test_ind_y1_g0=np.logical_and(y_pred_test == 1, group_test == 0)
+        to_flip = np.zeros(np.sum(test_ind_y1_g0))
+        to_flip[[i for i in range(int((1-self.p2p0)*np.sum(test_ind_y1_g0)))]] = 1
+        np.random.shuffle(to_flip)
+        eq_odd_pred_test[np.where(test_ind_y1_g0)[0][to_flip==1]]=0
+
+        test_ind_y1_g1=np.logical_and(y_pred_test == 1, group_test == 1)
+        to_flip = np.zeros(np.sum(test_ind_y1_g1))
+        to_flip[[i for i in range(int((1-self.p2p1)*np.sum(test_ind_y1_g1)))]] = 1
+        np.random.shuffle(to_flip)
+        eq_odd_pred_test[np.where(test_ind_y1_g1)[0][to_flip==1]]=0
+
+        test_ind_y0_g0=np.logical_and(y_pred_test == 0, group_test == 0)
+        to_flip = np.zeros(np.sum(test_ind_y0_g0))
+        to_flip[[i for i in range(int((self.n2p0)*np.sum(test_ind_y0_g0)))]] = 1
+        np.random.shuffle(to_flip)
+        eq_odd_pred_test[np.where(test_ind_y0_g0)[0][to_flip==1]]=1
+        
+        test_ind_y0_g1=np.logical_and(y_pred_test == 0, group_test == 1)
+        to_flip = np.zeros(np.sum(test_ind_y0_g1))
+        to_flip[[i for i in range(int((self.n2p1)*np.sum(test_ind_y0_g1)))]] = 1
+        np.random.shuffle(to_flip)
+        eq_odd_pred_test[np.where(test_ind_y0_g1)[0][to_flip==1]]=1
+
+        return eq_odd_pred_test
+
+    def predict(self, X_vals, group_test, sample=False):
+        if sample:
+            return self._predict_sample(X_vals, group_test)
+        else:
+            return self._predict_expectation(X_vals, group_test)
+
+
+def main(to_run_fcn, sens, unaware=False):
     X_train, X_test, sensitive_features_train, sensitive_features_test, \
-            y_train, y_test, sensitive_feature_names = get_income_data("race")
+            y_train, y_test, sensitive_feature_names = to_run_fcn(sens)
     sensitive_train_binary = convert_to_binary(sensitive_features_train, \
             sensitive_feature_names[1], sensitive_feature_names[0])
     sensitive_test_binary = convert_to_binary(sensitive_features_test, \
             sensitive_feature_names[1], sensitive_feature_names[0])
 
-    # 0 should be disadvantage/black, 1 advantage/white
+    # 0 should be black, 1 white
     sensitive_features_dict = {0:sensitive_feature_names[0], 1:sensitive_feature_names[1]}
 
-    dp_classifier = demographic_parity_classifier(X_train, y_train, sensitive_train_binary, \
-            sensitive_features_dict)
-    dp_classifier.fit(X_train, y_train)
+    # uncomment this for fariness throught unawareness
+    if unaware == True:
+        sensitive_train_binary, sensitive_test_binary = np.zeros(len(y_train)), np.zeros(len(y_test))
     
+    classifier = demographic_parity_classifier(X_train, y_train, sensitive_train_binary, \
+            sensitive_features_dict)
+    classifier.fit(verbose=True, _fairness="hard", _lambda=1000)
     total_train, total_test = 0, 0
     for i in range(NUM_SAMPLES):
-        total_train += dp_classifier.get_accuracy(X_train, y_train, sensitive_train_binary)
-        total_test += dp_classifier.get_accuracy(X_test, y_test, sensitive_test_binary)
+        total_train += classifier.get_accuracy(X_train, y_train, sensitive_train_binary)
+        total_test += classifier.get_accuracy(X_test, y_test, sensitive_test_binary)
+    
+    print("================= Getting Accuracy ==================")
     print("Train Acc:", total_train/NUM_SAMPLES) 
     print("Test Acc:", total_test/NUM_SAMPLES) 
-    
-    _, _ = dp_classifier.get_proportions(X_train, sensitive_train_binary)
-    dp_classifier.get_test_flips(X_test, sensitive_test_binary, True)
-    dp_classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train) 
     print("\n")
-    dp_classifier.get_group_confusion_matrix(sensitive_test_binary, X_test, y_test) 
+    
+    print("================ Getting positive classification rate by group ================")
+    classifier.get_proportions(X_train, y_train, sensitive_train_binary)
+    classifier.get_proportions(X_test, y_test, sensitive_test_binary)
+    print("\n")
+    
+    print("================ Getting strategic results =================")
+    classifier.get_test_flips_expectation(X_test, sensitive_test_binary, percent=True, to_print=True)
+    print("\n")
+
+    print("================ Getting Confusion Matrix ==================")
+    classifier.get_group_confusion_matrix(sensitive_train_binary, X_train, y_train, to_print=True) 
+    print("\n")
+
 
 if __name__ == "__main__":
-    main()
+    import sys
+    to_run = sys.argv[1]
+    sens = sys.argv[2]
+
+    unaware = False
+    if len(sys.argv) == 4:
+        unaware = sys.argv[3]
+        if unaware == "true":
+            unaware = True
+    
+    run_dict = {
+        'compas': get_data_compas,
+        'lawschool': get_data_lawschool,
+        'income': get_data_income,
+        'student': get_data_student
+    }
+
+    main(run_dict[to_run], sens, unaware)
+
+
+
+
 

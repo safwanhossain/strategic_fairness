@@ -7,7 +7,7 @@ from utils import *
 
 NUM_SAMPLES = 100
 
-class equalized_odds_classifier(base_binary_classifier):
+class equalized_opportunity_classifier(base_binary_classifier):
     def fit(self, _classifier_name="logistic",
             _fairness="hard", _lambda=0.5,
             verbose=False, use_group_in_base_classifier=True):
@@ -77,10 +77,9 @@ class equalized_odds_classifier(base_binary_classifier):
         ]
         if self._fairness == "hard":
             constraints.append(tpr0 == tpr1)
-            constraints.append(tnr0 == tnr1)
             prob = cvx.Problem(cvx.Minimize(error), constraints)
         else:
-            penalty = cvx.abs(tpr0 - tpr1) + cvx.abs(fpr0 - fpr1) 
+            penalty = cvx.abs(tpr0 - tpr1) 
             prob = cvx.Problem(cvx.Minimize(error + _lambda*penalty), constraints)
         
         try:
@@ -192,7 +191,7 @@ def main(to_run_fcn, sens, unaware=False):
     if unaware == True:
         sensitive_train_binary, sensitive_test_binary = np.zeros(len(y_train)), np.zeros(len(y_test))
     
-    classifier = equalized_odds_classifier(X_train, y_train, sensitive_train_binary, \
+    classifier = equalized_opportunity_classifier(X_train, y_train, sensitive_train_binary, \
             sensitive_features_dict)
     classifier.fit(_fairness="hard")
     total_train, total_test = 0, 0
@@ -238,6 +237,7 @@ if __name__ == "__main__":
     }
 
     main(run_dict[to_run], sens, unaware)
+
 
 
 

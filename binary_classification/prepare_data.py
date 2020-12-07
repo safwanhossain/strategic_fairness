@@ -9,6 +9,7 @@ from utils import *
 def get_data_compas(sensitive, get_stats=False):
     """ Here the desirable outcome is 0 - not going to re-offend. So gonna flip it
     """
+    print("Desirable outcome is always 1 or positive")
     assert sensitive == "race" or sensitive == "sex"
     from tempeh.configurations import datasets
     compas_dataset = datasets['compas']()
@@ -32,6 +33,7 @@ def get_data_compas(sensitive, get_stats=False):
             sensitive_feature_names
     
 def get_data_lawschool(sensitive, get_stats=False, rebalance=None):
+    print("Desirable outcome is always 1 or positive")
     assert sensitive == "race" or sensitive == "sex"
     from tempeh.configurations import datasets
     compas_dataset = datasets['lawschool_passbar']()
@@ -136,6 +138,7 @@ def get_data_income(s_attr, get_stats=False, rebalance=None, raw=False, drop=[])
             sensitive_feature_names
 
 def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None, raw=False, drop=[]):
+    print("Desirable outcome is always 1 or positive")
     s_dict = {'sex': 1, 'Pstatus':5, 'famsup':16}
     if subject == "math":
         filename = 'student_dataset/student-mat.csv'
@@ -177,7 +180,7 @@ def get_data_student(s_attr, get_stats=False, subject="math", rebalance=None, ra
     if s_attr == "famsup":
         sensitive_feature_names = ["no", "yes"]
 
-    return X_train, X_test, sen_train, sen_test, y_train, y_test, \
+    return X_train, X_test, sen_train, sen_test, y_train.astype("int"), y_test.astype("int"), \
             sensitive_feature_names
 
 def test_balancing():
